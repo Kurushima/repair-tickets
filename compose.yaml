@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: repair_tickets
+      POSTGRES_USER: repair
+      POSTGRES_PASSWORD: repair_local_dev
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-tickets.sql:ro
+
+volumes:
+  postgres-data:
