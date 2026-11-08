@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -34,12 +35,11 @@ func (s *ticketStore) updateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updated ticket
-	err := s.db.QueryRow(r.Context(), `
-		UPDATE tickets SET status = $1
-		WHERE id = $2 AND status = $3
-		RETURNING id, description, status
-	`, input.Status, id, previous).Scan(&updated.ID, &updated.Description, &updated.Status)
+	updated, err := s.changeStatus(r.Context(), id, previous, input.Status)
+	if errors.Is(err, errCacheUnavailable) {
+		http.Error(w, "Ticket cache unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
 		err = s.db.QueryRow(r.Context(), `
@@ -62,4 +62,21 @@ func (s *ticketStore) updateStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updated)
+}
+
+func (s *ticketStore) changeStatus(ctx context.Context, id int32, previous, next string) (ticket, error) {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+
+	if err := s.invalidateCache(ctx, id); err != nil {
+		return ticket{}, err
+	}
+
+	var updated ticket
+	err := s.db.QueryRow(ctx, `
+		UPDATE tickets SET status = $1
+		WHERE id = $2 AND status = $3
+		RETURNING id, description, status
+	`, next, id, previous).Scan(&updated.ID, &updated.Description, &updated.Status)
+	return updated, err
 }

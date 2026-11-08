@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -32,9 +33,25 @@ func main() {
 		log.Fatalf("Connect to PostgreSQL: %v", err)
 	}
 
+	cacheAddr := os.Getenv("KEYDB_ADDR")
+	if cacheAddr == "" {
+		cacheAddr = "127.0.0.1:16379"
+	}
+	cache := redis.NewClient(&redis.Options{
+		Addr:            cacheAddr,
+		Protocol:        2,
+		DisableIdentity: true,
+		DialTimeout:     500 * time.Millisecond,
+		ReadTimeout:     500 * time.Millisecond,
+		WriteTimeout:    500 * time.Millisecond,
+		MaxRetries:      -1,
+		DialerRetries:   1,
+	})
+	defer cache.Close()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
-	tickets := &ticketStore{db: db}
+	tickets := &ticketStore{db: db, cache: cache}
 	mux.HandleFunc("POST /tickets", tickets.create)
 	mux.HandleFunc("GET /tickets/{id}", tickets.get)
 	mux.HandleFunc("PATCH /tickets/{id}/status", tickets.updateStatus)

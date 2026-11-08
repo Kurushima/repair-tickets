@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 type createTicketRequest struct {
@@ -24,7 +26,9 @@ type ticket struct {
 }
 
 type ticketStore struct {
-	db *pgxpool.Pool
+	db      *pgxpool.Pool
+	cache   *redis.Client
+	cacheMu sync.Mutex
 }
 
 func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
@@ -62,10 +66,7 @@ func (s *ticketStore) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var found ticket
-	err := s.db.QueryRow(r.Context(), `
-		SELECT id, description, status FROM tickets WHERE id = $1
-	`, id).Scan(&found.ID, &found.Description, &found.Status)
+	found, err := s.lookup(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "Ticket not found", http.StatusNotFound)
 		return
