@@ -16,7 +16,11 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8080", "HTTP listen address")
+	defaultAddr := os.Getenv("HTTP_ADDR")
+	if defaultAddr == "" {
+		defaultAddr = "127.0.0.1:8080"
+	}
+	addr := flag.String("addr", defaultAddr, "HTTP listen address")
 	flag.Parse()
 
 	databaseURL := os.Getenv("DATABASE_URL")

@@ -14,6 +14,6 @@ FROM alpine:3.23
 WORKDIR /app
 COPY --from=build /out/api /out/worker ./
 USER 65532:65532
+ENV HTTP_ADDR=0.0.0.0:8080
 EXPOSE 8080
 ENTRYPOINT ["/app/api"]
-CMD ["-addr", "0.0.0.0:8080"]
