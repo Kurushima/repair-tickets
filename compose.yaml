@@ -17,5 +17,18 @@ services:
     ports:
       - "127.0.0.1:16379:6379"
 
+  rabbitmq:
+    image: rabbitmq:4.3.4-management
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: repair
+      RABBITMQ_DEFAULT_PASS: repair_rabbit_local
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
 volumes:
   postgres-data:
+  rabbitmq-data:
