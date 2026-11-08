@@ -73,10 +73,20 @@ func (s *ticketStore) changeStatus(ctx context.Context, id int32, previous, next
 	}
 
 	var updated ticket
-	err := s.db.QueryRow(ctx, `
-		UPDATE tickets SET status = $1
-		WHERE id = $2 AND status = $3
-		RETURNING id, description, status
-	`, next, id, previous).Scan(&updated.ID, &updated.Description, &updated.Status)
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			UPDATE tickets SET status = $1
+			WHERE id = $2 AND status = $3
+			RETURNING id, description, status
+		`, next, id, previous).Scan(&updated.ID, &updated.Description, &updated.Status)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO ticket_outbox (ticket_id, old_status, new_status)
+			VALUES ($1, $2, $3)
+		`, id, previous, next)
+		return err
+	})
 	return updated, err
 }

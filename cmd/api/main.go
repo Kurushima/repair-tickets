@@ -9,6 +9,8 @@ import (
 	"os"
 	"time"
 
+	"repair-tickets/internal/events"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -48,6 +50,9 @@ func main() {
 		DialerRetries:   1,
 	})
 	defer cache.Close()
+	outboxCtx, stopOutbox := context.WithCancel(context.Background())
+	defer stopOutbox()
+	go publishOutbox(outboxCtx, db, events.BrokerURL())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
