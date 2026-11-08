@@ -2,11 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type createTicketRequest struct {
@@ -20,8 +24,7 @@ type ticket struct {
 }
 
 type ticketStore struct {
-	mu      sync.Mutex
-	tickets []ticket
+	db *pgxpool.Pool
 }
 
 func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
@@ -43,10 +46,17 @@ func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	created := ticket{ID: len(s.tickets) + 1, Description: description, Status: "new"}
-	s.tickets = append(s.tickets, created)
-	s.mu.Unlock()
+	var created ticket
+	err = s.db.QueryRow(r.Context(), `
+		INSERT INTO tickets (description)
+		VALUES ($1)
+		RETURNING id, description, status
+	`, description).Scan(&created.ID, &created.Description, &created.Status)
+	if err != nil {
+		log.Printf("Create ticket: %v", err)
+		http.Error(w, "Cannot create ticket", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -54,28 +64,26 @@ func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ticketStore) get(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 32)
 	if err != nil || id < 1 {
 		http.Error(w, "Invalid ticket ID", http.StatusBadRequest)
 		return
 	}
 
-	found, ok := s.find(id)
-	if !ok {
+	var found ticket
+	err = s.db.QueryRow(r.Context(), `
+		SELECT id, description, status FROM tickets WHERE id = $1
+	`, int32(id)).Scan(&found.ID, &found.Description, &found.Status)
+	if errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "Ticket not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		log.Printf("Read ticket %d: %v", id, err)
+		http.Error(w, "Cannot read ticket", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(found)
-}
-
-func (s *ticketStore) find(id int) (ticket, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if id < 1 || id > len(s.tickets) {
-		return ticket{}, false
-	}
-	return s.tickets[id-1], true
 }
