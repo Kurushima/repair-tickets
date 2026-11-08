@@ -28,15 +28,8 @@ type ticketStore struct {
 }
 
 func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
-	if err != nil {
-		http.Error(w, "Cannot read request body", http.StatusBadRequest)
-		return
-	}
-
 	var input createTicketRequest
-	if err := json.Unmarshal(body, &input); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	if !readJSON(w, r, &input) {
 		return
 	}
 
@@ -47,7 +40,7 @@ func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var created ticket
-	err = s.db.QueryRow(r.Context(), `
+	err := s.db.QueryRow(r.Context(), `
 		INSERT INTO tickets (description)
 		VALUES ($1)
 		RETURNING id, description, status
@@ -64,16 +57,15 @@ func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ticketStore) get(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 32)
-	if err != nil || id < 1 {
-		http.Error(w, "Invalid ticket ID", http.StatusBadRequest)
+	id, ok := readTicketID(w, r)
+	if !ok {
 		return
 	}
 
 	var found ticket
-	err = s.db.QueryRow(r.Context(), `
+	err := s.db.QueryRow(r.Context(), `
 		SELECT id, description, status FROM tickets WHERE id = $1
-	`, int32(id)).Scan(&found.ID, &found.Description, &found.Status)
+	`, id).Scan(&found.ID, &found.Description, &found.Status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "Ticket not found", http.StatusNotFound)
 		return
@@ -86,4 +78,26 @@ func (s *ticketStore) get(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(found)
+}
+
+func readJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+	if err != nil {
+		http.Error(w, "Cannot read request body", http.StatusBadRequest)
+		return false
+	}
+	if err := json.Unmarshal(body, destination); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func readTicketID(w http.ResponseWriter, r *http.Request) (int32, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 32)
+	if err != nil || id < 1 {
+		http.Error(w, "Invalid ticket ID", http.StatusBadRequest)
+		return 0, false
+	}
+	return int32(id), true
 }

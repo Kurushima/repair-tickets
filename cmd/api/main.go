@@ -37,6 +37,7 @@ func main() {
 	tickets := &ticketStore{db: db}
 	mux.HandleFunc("POST /tickets", tickets.create)
 	mux.HandleFunc("GET /tickets/{id}", tickets.get)
+	mux.HandleFunc("PATCH /tickets/{id}/status", tickets.updateStatus)
 
 	log.Printf("Starting HTTP server on http://%s", *addr)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
