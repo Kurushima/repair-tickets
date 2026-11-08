@@ -13,6 +13,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
+	tickets := &ticketStore{}
+	mux.HandleFunc("POST /tickets", tickets.create)
 
 	log.Printf("Starting HTTP server on http://%s", *addr)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
