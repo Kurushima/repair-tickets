@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -50,4 +51,31 @@ func (s *ticketStore) create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(created)
+}
+
+func (s *ticketStore) get(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id < 1 {
+		http.Error(w, "Invalid ticket ID", http.StatusBadRequest)
+		return
+	}
+
+	found, ok := s.find(id)
+	if !ok {
+		http.Error(w, "Ticket not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(found)
+}
+
+func (s *ticketStore) find(id int) (ticket, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if id < 1 || id > len(s.tickets) {
+		return ticket{}, false
+	}
+	return s.tickets[id-1], true
 }

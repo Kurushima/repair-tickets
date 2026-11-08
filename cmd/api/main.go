@@ -15,6 +15,7 @@ func main() {
 	mux.HandleFunc("GET /health", health)
 	tickets := &ticketStore{}
 	mux.HandleFunc("POST /tickets", tickets.create)
+	mux.HandleFunc("GET /tickets/{id}", tickets.get)
 
 	log.Printf("Starting HTTP server on http://%s", *addr)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
