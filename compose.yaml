@@ -11,6 +11,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/001-tickets.sql:ro
       - ./db/002-outbox.sql:/docker-entrypoint-initdb.d/002-outbox.sql:ro
+      - ./db/003-history.sql:/docker-entrypoint-initdb.d/003-history.sql:ro
 
   keydb:
     image: eqalpha/keydb:x86_64_v6.3.4

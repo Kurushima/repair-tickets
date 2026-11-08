@@ -60,6 +60,7 @@ func main() {
 	mux.HandleFunc("POST /tickets", tickets.create)
 	mux.HandleFunc("GET /tickets/{id}", tickets.get)
 	mux.HandleFunc("PATCH /tickets/{id}/status", tickets.updateStatus)
+	mux.HandleFunc("GET /tickets/{id}/history", tickets.history)
 
 	log.Printf("Starting HTTP server on http://%s", *addr)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
